@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>韬鉴 StratLens</title>
+<meta name="description" content="基于 BERTopic 主题建模与 FACE 重构模型的军事话语海外传播评估分析平台">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={theme:{extend:{fontFamily:{sans:['"PingFang SC"','"Hiragino Sans GB"','"Microsoft YaHei"','ui-sans-serif','system-ui','-apple-system','BlinkMacSystemFont','"Segoe UI"','Roboto','"Helvetica Neue"','Arial','sans-serif'],mono:['ui-monospace','SFMono-Regular','Menlo','Monaco','Consolas','"Liberation Mono"','"Courier New"','monospace']}}}}
+</script>
+<style>
+body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif}
+.line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeIn .4s ease-out}
+.glass{background:rgba(255,255,255,.65);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.5)}
+.glass-strong{background:rgba(255,255,255,.8);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,.6)}
+.glass-subtle{background:rgba(255,255,255,.45);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.35)}
+.radar-polygon{transition:all .8s ease-out}
+.bar-fill{transition:width .7s ease-out}
+</style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 text-slate-800 antialiased">
+
+<!-- Header -->
+<header class="glass-strong sticky top-0 z-50 border-b border-white/40 shadow-sm">
+  <div class="max-w-7xl mx-auto px-6 py-4">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-200">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-800 tracking-tight"><span id="header-name">韬鉴</span> <span class="text-indigo-500 font-semibold">StratLens</span></h1>
+          <p class="text-xs text-slate-500 mt-0.5" id="header-subtitle">中国军事活动海外传播 · 主题建模与重构模型分析</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="hidden sm:inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-600 border border-indigo-100">BERTopic</span>
+        <span class="hidden sm:inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-600 border border-emerald-100">FACE 模型</span>
+        <button id="lang-toggle" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
+          <span id="lang-label">EN</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-8">
+  <!-- Tab Navigation -->
+  <div class="flex gap-1 mb-8 glass rounded-xl p-1 w-fit shadow-sm" id="tab-nav">
+    <button data-tab="input" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-white text-indigo-600 shadow-sm border border-indigo-100" id="tab-btn-input">情景与方案输入</button>
+    <button data-tab="bertopic" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-700 transition-all" id="tab-btn-bertopic">BERTopic 主题分析</button>
+    <button data-tab="face" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-700 transition-all" id="tab-btn-face">FACE 模型评估</button>
+    <button data-tab="feedback" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-700 transition-all" id="tab-btn-feedback">综合反馈</button>
+  </div>
+
+  <!-- Input Tab -->
+  <div id="tab-input" class="tab-content">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <!-- Scenario -->
+      <div class="glass rounded-xl shadow-lg p-6 space-y-4">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-rose-50 flex items-center justify-center border border-rose-100"><span class="text-rose-500 font-bold text-sm">S</span></div>
+          <div>
+            <h2 class="text-base font-semibold text-slate-800" id="scenario-title">情景设置</h2>
+            <p class="text-xs text-slate-500" id="scenario-desc">描述中国军事话语海外传播中遇到的问题情景</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2" id="preset-scenarios"></div>
+        <textarea id="scenario-input" class="w-full h-44 px-4 py-3 bg-white/50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all text-sm leading-relaxed backdrop-blur-sm" placeholder="请描述中国军事话语海外传播中遇到的具体问题情景..."></textarea>
+      </div>
+      <!-- Solution -->
+      <div class="glass rounded-xl shadow-lg p-6 space-y-4">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-100"><span class="text-emerald-600 font-bold text-sm">R</span></div>
+          <div>
+            <h2 class="text-base font-semibold text-slate-800" id="solution-title">应对方案</h2>
+            <p class="text-xs text-slate-500" id="solution-desc">提出解决上述情景问题的应对方案</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2" id="preset-solutions"></div>
+        <textarea id="solution-input" class="w-full h-44 px-4 py-3 bg-white/50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all text-sm leading-relaxed backdrop-blur-sm" placeholder="请提出针对上述情景问题的具体应对方案..."></textarea>
+      </div>
+    </div>
+    <div class="mt-8 flex justify-center">
+      <button id="analyze-btn" class="px-8 py-3.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-slate-300 disabled:to-slate-400 disabled:text-slate-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-200 disabled:shadow-none flex items-center gap-2.5 text-sm">
+        <span id="btn-icon"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></span>
+        <span id="btn-text">启动 BERTopic × FACE 分析</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- BERTopic Tab -->
+  <div id="tab-bertopic" class="tab-content hidden"><div id="bertopic-content"></div></div>
+  <!-- FACE Tab -->
+  <div id="tab-face" class="tab-content hidden"><div id="face-content"></div></div>
+  <!-- Feedback Tab -->
+  <div id="tab-feedback" class="tab-content hidden"><div id="feedback-content"></div></div>
+  <!-- Empty State -->
+  <div id="empty-state" class="text-center py-20 hidden">
+    <div class="w-16 h-16 rounded-2xl bg-white/60 border border-slate-200 flex items-center justify-center mx-auto mb-4 shadow-sm">
+      <svg class="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+    </div>
+    <p class="text-slate-500 text-sm" id="empty-text">请先在「情景与方案输入」中填写内容并启动分析</p>
+    <button onclick="switchTab('input')" class="mt-4 px-4 py-2 text-sm text-indigo-600 hover:text-indigo-700 font-medium transition-colors" id="empty-btn">前往输入 →</button>
+  </div>
+</main>
+
+<!-- Footer -->
+<footer class="border-t border-slate-200/60 mt-16">
+  <div class="max-w-7xl mx-auto px-6 py-6">
+    <p class="text-xs text-slate-400 text-center" id="footer-text">韬鉴 StratLens · 基于主题建模与重构模型的分析工具</p>
+  </div>
+</footer>
+
+<script>
+// ====== Translation System ======
+const T = {
+  zh: {
+    platformName:'韬鉴', platformNameEn:'StratLens', platformSubtitle:'中国军事活动海外传播 · 主题建模与重构模型分析',
+    headerBadge1:'BERTopic', headerBadge2:'FACE 模型',
+    tabInput:'情景与方案输入', tabBertopic:'BERTopic 主题分析', tabFace:'FACE 模型评估', tabFeedback:'综合反馈',
+    scenarioTitle:'情景设置', scenarioDesc:'描述中国军事话语海外传播中遇到的问题情景',
+    scenarioPlaceholder:'请描述中国军事话语海外传播中遇到的具体问题情景...',
+    exampleLabel:'例',
+    scenarioWesternMedia:'西方媒体偏见', scenarioDiscourseFramework:'话语框架缺失', scenarioCulturalBarrier:'文化差异障碍',
+    scenarioChannelLimited:'信息传播渠道受限', scenarioNarrativeWeak:'叙事能力不足',
+    solutionTitle:'应对方案', solutionDesc:'提出解决上述情景问题的应对方案',
+    solutionPlaceholder:'请提出针对上述情景问题的具体应对方案...',
+    solutionMediaPlatform:'构建国际军事传播平台', solutionConceptFramework:'重构安全概念框架',
+    solutionFactBased:'事实驱动的话语策略', solutionDiplomacyEngage:'深化军事外交参与', solutionValueConnect:'价值共鸣连接策略',
+    analyzeButton:'启动 BERTopic × FACE 分析', analyzing:'正在分析...',
+    goToInput:'前往输入 →', emptyState:'请先在「情景与方案输入」中填写内容并启动分析',
+    bertopicTitle:'BERTopic 主题分析结果', bertopicSubtitle:'识别出 {0} 个主题 · 主导主题：{1}',
+    topicDistribution:'主题分布',
+    faceTitle:'FACE 重构模型评估', faceSubtitle:'Frame · Anchor · Connect · Engage 四维评估',
+    radarChartTitle:'四维雷达图', cognitiveLine:'认知路线',
+    feedbackTitle:'综合评估反馈', feedbackSubtitle:'BERTopic 主题分析 × FACE 模型评估 × 方案有效性评分',
+    overallScore:'方案综合评分', topicCoverage:'主题覆盖度', problemAlignment:'问题对齐度',
+    completeness:'完整性', actionability:'可操作性', innovation:'创新性',
+    strengths:'方案亮点（肯定）', improvements:'修改建议', faceOverview:'FACE 四维评分概览',
+    langZh:'中文', langEn:'EN',
+    footer:'韬鉴 StratLens · 基于主题建模与重构模型的分析工具',
+    scoreExcellent:'优秀', scoreGood:'良好', scoreNeedsWork:'待提升', scoreInsufficient:'不足',
+    dimF:'认知框架重构', dimA:'事实锚定', dimC:'价值连接', dimE:'外交参与',
+  },
+  en: {
+    platformName:'StratLens', platformNameEn:'StratLens', platformSubtitle:'Overseas Communication of China\'s Military Activities · Topic Modeling & Reframing Analysis',
+    headerBadge1:'BERTopic', headerBadge2:'FACE Model',
+    tabInput:'Scenario & Solution Input', tabBertopic:'BERTopic Analysis', tabFace:'FACE Model Evaluation', tabFeedback:'Overall Feedback',
+    scenarioTitle:'Scenario Setup', scenarioDesc:'Describe the challenges in overseas communication of China\'s military discourse',
+    scenarioPlaceholder:'Please describe the specific challenges in overseas military discourse communication...',
+    exampleLabel:'Ex.',
+    scenarioWesternMedia:'Western Media Bias', scenarioDiscourseFramework:'Discourse Framework Gap', scenarioCulturalBarrier:'Cultural Barriers',
+    scenarioChannelLimited:'Limited Channels', scenarioNarrativeWeak:'Weak Narrative',
+    solutionTitle:'Response Strategy', solutionDesc:'Propose solutions to address the scenario challenges',
+    solutionPlaceholder:'Please propose specific solutions to address the challenges above...',
+    solutionMediaPlatform:'Build International Media Platform', solutionConceptFramework:'Reframe Security Concepts',
+    solutionFactBased:'Fact-Driven Discourse Strategy', solutionDiplomacyEngage:'Deepen Defense Diplomacy', solutionValueConnect:'Value Resonance Strategy',
+    analyzeButton:'Launch BERTopic × FACE Analysis', analyzing:'Analyzing...',
+    goToInput:'Go to Input →', emptyState:'Please fill in the scenario and solution first, then launch the analysis',
+    bertopicTitle:'BERTopic Analysis Results', bertopicSubtitle:'Identified {0} topics · Dominant: {1}',
+    topicDistribution:'Topic Distribution',
+    faceTitle:'FACE Reframing Model Evaluation', faceSubtitle:'Frame · Anchor · Connect · Engage — Four-Dimensional Assessment',
+    radarChartTitle:'Radar Chart', cognitiveLine:'Cognitive Line',
+    feedbackTitle:'Overall Evaluation Feedback', feedbackSubtitle:'BERTopic Analysis × FACE Model × Solution Effectiveness Score',
+    overallScore:'Overall Score', topicCoverage:'Topic Coverage', problemAlignment:'Problem Alignment',
+    completeness:'Completeness', actionability:'Actionability', innovation:'Innovation',
+    strengths:'Strengths', improvements:'Suggestions for Improvement', faceOverview:'FACE Dimension Overview',
+    langZh:'中文', langEn:'EN',
+    footer:'StratLens · Topic Modeling & Reframing Model Analysis Tool',
+    scoreExcellent:'Excellent', scoreGood:'Good', scoreNeedsWork:'Needs Work', scoreInsufficient:'Insufficient',
+    dimF:'Cognitive Reframing', dimA:'Fact Anchoring', dimC:'Value Connection', dimE:'Diplomatic Engagement',
+  }
+};
+
+let locale = 'zh';
+function t(key,...args){
+  let val = T[locale][key]||key;
+  if(typeof val==='function') return val(...args);
+  args.forEach((a,i)=>{val=val.replace('{'+i+'}',a)});
+  return val;
+}
+function toggleLocale(){ locale=locale==='zh'?'en':'zh'; renderAll(); }
+
+// ====== Preset Data ======
+const PRESET_SCENARIOS = [
+  {id:'western-media-bias', labelKey:'scenarioWesternMedia',
+   textZh:'西方主流媒体对中国军事活动存在系统性负面框架，中国军事话语在国际舆论场中被边缘化，缺乏有效的国际传播渠道和话语平台。',
+   textEn:'Western mainstream media has a systemic negative framing of China\'s military activities. China\'s military discourse is marginalized in the international public opinion arena, lacking effective international communication channels and discourse platforms.'},
+  {id:'discourse-framework', labelKey:'scenarioDiscourseFramework',
+   textZh:'军事话语体系缺乏国际通用的概念框架，防御性政策难以被国际社会准确理解，军事现代化被误读为威胁扩张。',
+   textEn:'The military discourse system lacks internationally recognized conceptual frameworks. Defensive policies are difficult for the international community to accurately understand, and military modernization is misread as threatening expansion.'},
+  {id:'cultural-barrier', labelKey:'scenarioCulturalBarrier',
+   textZh:'中西方军事文化传统差异导致理解偏差，中国军事术语在国际语境中缺乏对应概念，价值观差异影响话语接受度。',
+   textEn:'Differences in Chinese and Western military cultural traditions lead to understanding deviations. Chinese military terminology lacks corresponding concepts in international contexts, and value differences affect discourse acceptance.'},
+  {id:'channel-limited', labelKey:'scenarioChannelLimited',
+   textZh:'国际主流社交媒体平台对中国军事信息传播有限制，缺乏具有国际影响力的军事信息传播平台，多语种军事信息发布能力不足。',
+   textEn:'International mainstream social media platforms restrict the dissemination of China\'s military information. There is a lack of militarily influential information platforms with international reach, and multilingual military information publishing capabilities are insufficient.'},
+  {id:'narrative-weak', labelKey:'scenarioNarrativeWeak',
+   textZh:'军事故事的国际叙事能力有待提升，缺乏生动具体的案例支撑话语体系，数据可视化和多媒体传播手段运用不足。',
+   textEn:'The international narrative capability of military stories needs improvement. There is a lack of vivid and specific cases to support the discourse system, and the use of data visualization and multimedia communication methods is insufficient.'},
+];
+
+const PRESET_SOLUTIONS = [
+  {id:'media-platform', labelKey:'solutionMediaPlatform',
+   textZh:'建立多语种的国际化军事信息传播平台，利用数字化和智能化技术驱动内容生产与分发。加强与国际主流媒体的合作对话，推动建立公平合理的国际军事新闻传播秩序。创新叙事方式，运用数据可视化和多媒体手段增强传播效果。',
+   textEn:'Establish a multilingual international military information dissemination platform, leveraging digital and intelligent technologies to drive content production and distribution. Strengthen cooperation and dialogue with international mainstream media, and promote a fair and reasonable international military news communication order. Innovate narrative methods, using data visualization and multimedia to enhance communication effectiveness.'},
+  {id:'concept-framework', labelKey:'solutionConceptFramework',
+   textZh:'以全球安全倡议为核心，构建共同、综合、合作、可持续的安全概念框架。将中国军事话语从"力量展示"转向"安全平衡"范式，引入国际通用的安全术语和概念体系。通过学术交流和 Track-II 外交推动概念框架的国际认同。',
+   textEn:'Centered on the Global Security Initiative, build a common, comprehensive, cooperative, and sustainable security concept framework. Shift China\'s military discourse from "power display" to "security balance" paradigm, introducing internationally recognized security terminology and conceptual systems. Promote international recognition of the conceptual framework through academic exchanges and Track-II diplomacy.'},
+  {id:'fact-based', labelKey:'solutionFactBased',
+   textZh:'建立基于事实和数据的话语支撑体系，系统整理中国参与联合国维和、人道主义救援、国际联合演习等具体案例。依据国际法和联合国公约提供法律依据，用客观数据回应西方媒体的偏见报道。制定标准化的军事术语多语种翻译规范。',
+   textEn:'Establish a fact and data-based discourse support system, systematically organizing specific cases of China\'s participation in UN peacekeeping, humanitarian rescue, and international joint exercises. Provide legal basis according to international law and UN conventions, using objective data to respond to biased Western media reports. Develop standardized multilingual translation norms for military terminology.'},
+  {id:'diplomacy-engage', labelKey:'solutionDiplomacyEngage',
+   textZh:'加强多边军事外交参与，深化与国际社会的防务合作对话。通过联合演习、军事交流、维和行动等实质性参与展示负责任大国形象。利用国际军事论坛和对话平台主动设置议题，增强在国际安全治理中的话语权和影响力。',
+   textEn:'Strengthen multilateral military diplomatic engagement, deepening defense cooperation dialogue with the international community. Demonstrate the image of a responsible major power through substantive participation in joint exercises, military exchanges, and peacekeeping operations. Proactively set agendas using international military forums and dialogue platforms, enhancing discourse power and influence in international security governance.'},
+  {id:'value-connect', labelKey:'solutionValueConnect',
+   textZh:'以人类命运共同体理念为价值连接点，寻找与不同文化背景受众的共同利益和价值观交汇。通过讲述中国军人参与国际救援、保护平民、维护和平的生动故事，建立情感共鸣。推动军事文化交流项目，增进相互理解和信任。',
+   textEn:'Using the concept of a community with a shared future for mankind as a value connection point, find common interests and value intersections with audiences from different cultural backgrounds. Build emotional resonance by telling vivid stories of Chinese military personnel participating in international rescue, protecting civilians, and maintaining peace. Promote military cultural exchange projects to enhance mutual understanding and trust.'},
+];
+
+// ====== BERTopic Engine ======
+const PREDEFINED_TOPICS = [
+  {topicId:0, topicName:'军事力量平衡', keywords:['军力','平衡','防御','战略','威慑','现代化','装备'], representativeDocs:['中国坚持防御性国防政策，军事现代化旨在维护地区和平稳定','军事力量建设服务于国家主权和领土完整的正当需求']},
+  {topicId:1, topicName:'台湾海峡危机动态', keywords:['台湾','海峡','统一','主权','领土','分裂','反独'], representativeDocs:['台湾问题是中国核心利益中的核心，不容任何外部干涉','坚持一个中国原则是国际社会的普遍共识']},
+  {topicId:2, topicName:'地缘政治扩张叙事', keywords:['扩张','地缘','南海','东海','岛礁','维权','海域'], representativeDocs:['中国在南海的活动完全在主权范围内，符合国际法','岛礁建设主要用于民事服务，包括搜救、气象观测等']},
+  {topicId:3, topicName:'防御外交与参与', keywords:['外交','合作','维和','联合演习','人道主义','救援','对话'], representativeDocs:['中国积极参与联合国维和行动，是安理会常任理事国中最大维和出兵国','通过军事外交增进互信，推动构建人类命运共同体']},
+  {topicId:4, topicName:'安全概念重构', keywords:['安全','共同安全','合作安全','可持续','全球','治理','倡议'], representativeDocs:['全球安全倡议倡导共同、综合、合作、可持续的安全观','反对冷战思维和零和博弈，推动构建均衡、有效、可持续的安全架构']},
+  {topicId:5, topicName:'媒体话语权竞争', keywords:['媒体','话语','叙事','传播','舆论','西方','偏见'], representativeDocs:['西方媒体对中国军事活动的报道存在系统性偏见','需要构建自主的军事话语体系，打破西方话语垄断']},
+];
+const KEYWORD_TOPIC_MAP = {'军力':0,'平衡':0,'防御':0,'威慑':0,'现代化':0,'装备':0,'战略':0,'台湾':1,'海峡':1,'统一':1,'主权':1,'领土':1,'分裂':1,'反独':1,'扩张':2,'地缘':2,'南海':2,'东海':2,'岛礁':2,'维权':2,'海域':2,'外交':3,'合作':3,'维和':3,'演习':3,'人道主义':3,'救援':3,'对话':3,'安全':4,'共同安全':4,'合作安全':4,'可持续':4,'全球':4,'治理':4,'倡议':4,'媒体':5,'话语':5,'叙事':5,'传播':5,'舆论':5,'西方':5,'偏见':5};
+const SCENARIO_PROBLEMS = {'西方媒体偏见':['西方主流媒体对中国军事活动存在系统性负面框架','中国军事话语在国际舆论场中被边缘化','缺乏有效的国际传播渠道和话语平台'],'话语框架缺失':['军事话语体系缺乏国际通用的概念框架','防御性政策难以被国际社会准确理解','军事现代化被误读为威胁扩张'],'文化差异障碍':['中西方军事文化传统差异导致理解偏差','中国军事术语在国际语境中缺乏对应概念','价值观差异影响话语接受度'],'信息传播渠道受限':['国际主流社交媒体平台对中国军事信息传播有限制','缺乏具有国际影响力的军事信息传播平台','多语种军事信息发布能力不足'],'叙事能力不足':['军事故事的国际叙事能力有待提升','缺乏生动具体的案例支撑话语体系','数据可视化和多媒体传播手段运用不足']};
+
+function analyzeScenario(scenario){
+  const problems=[], matchedTopics=new Set();
+  for(const [keyword,problemList] of Object.entries(SCENARIO_PROBLEMS)){ if(scenario.includes(keyword)) problems.push(...problemList); }
+  if(problems.length===0){ problems.push('情景描述中未识别到预定义问题类别，将进行通用主题分析','建议明确描述具体的传播障碍或挑战'); }
+  for(const [keyword,topicId] of Object.entries(KEYWORD_TOPIC_MAP)){ if(scenario.includes(keyword)) matchedTopics.add(topicId); }
+  return {problems, matchedTopics:Array.from(matchedTopics)};
+}
+
+function analyzeSolution(solution,scenarioProblems){
+  const topicCounts=new Map();
+  for(const [keyword,topicId] of Object.entries(KEYWORD_TOPIC_MAP)){ if(solution.includes(keyword)) topicCounts.set(topicId,(topicCounts.get(topicId)||0)+1); }
+  if(topicCounts.size===0){
+    solution.split(/[\s,，。！？、；;]+/).forEach(word=>{ for(const [keyword,topicId] of Object.entries(KEYWORD_TOPIC_MAP)){ if(word.includes(keyword)||keyword.includes(word)) topicCounts.set(topicId,(topicCounts.get(topicId)||0)+1); } });
+  }
+  if(topicCounts.size===0){
+    if(solution.includes('媒体')||solution.includes('传播')||solution.includes('平台')) topicCounts.set(5,3);
+    if(solution.includes('合作')||solution.includes('外交')||solution.includes('对话')) topicCounts.set(3,3);
+    if(solution.includes('安全')||solution.includes('框架')||solution.includes('概念')) topicCounts.set(4,2);
+    if(solution.includes('台湾')||solution.includes('主权')||solution.includes('领土')) topicCounts.set(1,2);
+    if(solution.includes('防御')||solution.includes('现代化')||solution.includes('军力')) topicCounts.set(0,2);
+    if(solution.includes('南海')||solution.includes('海域')||solution.includes('维权')) topicCounts.set(2,2);
+    if(topicCounts.size===0){ topicCounts.set(5,2); topicCounts.set(3,1); }
+  }
+  const totalMentions=Array.from(topicCounts.values()).reduce((a,b)=>a+b,0);
+  const topics=PREDEFINED_TOPICS.map(topic=>{ const count=topicCounts.get(topic.topicId)||0; return {...topic, size:count, share:totalMentions>0?count/totalMentions:0}; }).filter(t=>t.size>0);
+  topics.sort((a,b)=>b.size-a.size);
+  const dominantTopic=topics.length>0?topics[0]:null;
+  return {topics, totalTopics:topics.length, dominantTopic, topicDistribution:topics.map(t=>({topicId:t.topicId,name:t.topicName,count:t.size}))};
+}
+
+function evaluateSolutionEffectiveness(solution,scenarioProblems,bertopicResult){
+  const strengths=[], improvements=[];
+  const topicCoverageRaw=Math.min(bertopicResult.totalTopics/4,1);
+  const topicCoverage=Math.round(topicCoverageRaw*100);
+  if(bertopicResult.totalTopics>=4) strengths.push(`主题覆盖广泛，涉及 ${bertopicResult.totalTopics} 个核心议题领域`);
+  else if(bertopicResult.totalTopics>=2) improvements.push(`主题覆盖 ${bertopicResult.totalTopics} 个领域，建议拓展至更多相关议题`);
+  else improvements.push('主题覆盖较为单一，建议从多个维度构建解决方案');
+
+  let problemAlignmentRaw=0;
+  if(scenarioProblems.length>0&&scenarioProblems[0]!=='情景描述中未识别到预定义问题类别，将进行通用主题分析'){
+    const matchedProblems=scenarioProblems.filter(problem=>{
+      const problemKeywords=problem.split(/[\s,，。！？、；;]+/).filter(w=>w.length>=2);
+      return problemKeywords.some(kw=>solution.includes(kw));
+    });
+    problemAlignmentRaw=matchedProblems.length/scenarioProblems.length;
+    if(problemAlignmentRaw>=0.6) strengths.push('解决方案较好地回应了情景中的核心问题');
+    else if(problemAlignmentRaw>=0.3) improvements.push('方案部分回应了情景问题，建议更直接地针对具体挑战');
+    else improvements.push('方案与情景问题的关联度较低，需要加强针对性');
+  }else{ problemAlignmentRaw=0.5; }
+  const problemAlignment=Math.round(problemAlignmentRaw*100);
+
+  let completenessRaw=0;
+  const sl=solution.length;
+  if(sl>300){ completenessRaw=1; strengths.push('方案论述充分，内容详实'); }
+  else if(sl>150){ completenessRaw=0.7; improvements.push('方案内容基本完整，建议补充更多实施细节'); }
+  else if(sl>80){ completenessRaw=0.4; improvements.push('方案内容较为简略，建议展开论述具体措施'); }
+  else{ completenessRaw=0.2; improvements.push('方案内容不足，需要大幅扩充'); }
+  const completeness=Math.round(completenessRaw*100);
+
+  const actionKeywords=['建立','构建','推动','加强','完善','制定','实施','开展','促进','深化','拓展','创新'];
+  const actionCount=actionKeywords.filter(kw=>solution.includes(kw)).length;
+  const actionabilityRaw=Math.min(actionCount/4,1);
+  const actionability=Math.round(actionabilityRaw*100);
+  if(actionCount>=4) strengths.push('方案包含多项具体行动措施，可操作性较强');
+  else if(actionCount>=2) improvements.push('建议增加更多具体的行动措施和实施步骤');
+  else improvements.push('方案缺乏具体的行动措施，建议明确实施路径');
+
+  const innovationKeywords=['创新','新型','数字化','智能化','融合','跨界','前沿','新兴','技术驱动','数据驱动'];
+  const innovationCount=innovationKeywords.filter(kw=>solution.includes(kw)).length;
+  const innovationRaw=Math.min(innovationCount/3,1);
+  const innovation=Math.round(innovationRaw*100);
+  if(innovationCount>=2) strengths.push('方案体现了创新思维，融入了前沿方法');
+  else if(innovationCount>=1) improvements.push('可考虑融入更多创新元素和前沿方法');
+  else improvements.push('方案思路较为传统，建议探索创新性解决路径');
+
+  const score=Math.round(topicCoverageRaw*20+problemAlignmentRaw*20+completenessRaw*20+actionabilityRaw*20+innovationRaw*20);
+  return {score,strengths,improvements,topicCoverage,problemAlignment,completeness,actionability,innovation};
+}
+
+// ====== FACE Engine ======
+const DIMENSION_KEYWORDS = {
+  F:{positive:['框架','重构','概念','认知','话语体系','叙事框架','理论','范式','安全概念','共同安全','防御性','和平','稳定','平衡'],negative:['威胁','扩张','霸权','军事化','武力','侵略']},
+  A:{positive:['事实','数据','证据','法律依据','国际法','历史','主权','领土完整','一个中国','联合国','公约','条约','先例'],negative:['模糊','不确定','争议','单方面','主观']},
+  C:{positive:['连接','共同','共享','合作','互利','共赢','命运','共同体','价值','理念','共识','对话','交流','互信','理解'],negative:['对立','对抗','零和','排他','孤立','封闭']},
+  E:{positive:['参与','外交','维和','救援','人道主义','联合演习','多边','国际','全球','开放','透明','沟通','传播','媒体'],negative:['封闭','孤立','拒绝','回避','沉默']},
+};
+const DIMENSION_INFO = {
+  F:{key:'F',name:'Frame',fullName:'Cognitive Reframing',fullNameZh:'认知框架重构',description:'评估方案是否有效重构了军事话语的认知框架，将"他塑"叙事转化为"自塑"叙事',descriptionEn:'Evaluates whether the solution effectively reframes military discourse from "other-shaped" to "self-shaped" narrative',cognitiveLine:'Military Power Balancing → Common Security Concept',color:'#6366f1',maxScore:100},
+  A:{key:'A',name:'Anchor',fullName:'Fact Anchoring',fullNameZh:'事实锚定',description:'评估方案是否以事实、数据和法律依据为基础锚定话语立场',descriptionEn:'Evaluates whether the solution anchors discourse positions on facts, data, and legal basis',cognitiveLine:'Taiwan Strait Crisis Dynamics → Facts & Custom Terminology',color:'#f43f5e',maxScore:100},
+  C:{key:'C',name:'Connect',fullName:'Value Connection',fullNameZh:'价值连接',description:'评估方案是否建立了与目标受众的价值观连接，找到共同利益点',descriptionEn:'Evaluates whether the solution establishes value connections with target audiences',cognitiveLine:'Geopolitical Expansion → Shared-Future Value Link',color:'#10b981',maxScore:100},
+  E:{key:'E',name:'Engage',fullName:'Diplomatic Engagement',fullNameZh:'外交参与',description:'评估方案是否提出了有效的外交参与和传播参与策略',descriptionEn:'Evaluates whether the solution proposes effective diplomatic and communication engagement strategies',cognitiveLine:'Defense Diplomacy & Engagement → Amplify Defense Diplomacy',color:'#f59e0b',maxScore:100},
+};
+
+function evaluateDimension(key,solution){
+  const keywords=DIMENSION_KEYWORDS[key]; if(!keywords) return {score:50,assessment:'无法评估',suggestions:[]};
+  let positiveHits=0,negativeHits=0;
+  keywords.positive.forEach(kw=>{if(solution.includes(kw))positiveHits++});
+  keywords.negative.forEach(kw=>{if(solution.includes(kw))negativeHits++});
+  const positiveRatio=positiveHits/keywords.positive.length;
+  const baseScore=Math.min(positiveRatio*100,75);
+  const penalty=negativeHits*8;
+  const score=Math.max(15,Math.min(95,Math.round(baseScore-penalty+15)));
+  let assessment='',suggestions=[];
+  const info=DIMENSION_INFO[key];
+  if(score>=75) assessment=`在${info.fullNameZh}维度表现优秀，策略较为成熟`;
+  else if(score>=55){ assessment=`在${info.fullNameZh}维度表现良好，仍有提升空间`; suggestions.push(`可进一步强化${info.description.split('，')[1]||'相关策略'}`); }
+  else if(score>=35){ assessment=`在${info.fullNameZh}维度有待加强`; suggestions.push(`建议重点加强${info.fullNameZh}方面的策略设计`); suggestions.push(`参考认知路线：${info.cognitiveLine}`); }
+  else{ assessment=`在${info.fullNameZh}维度存在明显不足`; suggestions.push(`亟需重视${info.fullNameZh}维度的构建`); suggestions.push(`建议从"${info.cognitiveLine}"的认知路线入手`); }
+  switch(key){
+    case 'F': if(positiveHits<2){ suggestions.push('尝试将军事话语从"力量展示"框架转向"安全平衡"框架'); suggestions.push('引入"共同安全""综合安全"等概念重构认知框架'); } break;
+    case 'A': if(positiveHits<2){ suggestions.push('增加具体数据、法律条文或历史事实作为论据支撑'); suggestions.push('使用国际通用的法律术语和概念体系'); } break;
+    case 'C': if(positiveHits<2){ suggestions.push('寻找与目标受众的共同价值观和利益交汇点'); suggestions.push('强调"人类命运共同体"等共享价值理念'); } break;
+    case 'E': if(positiveHits<2){ suggestions.push('增加多边外交、国际军事合作等参与性策略'); suggestions.push('利用国际媒体平台和社交网络扩大传播影响力'); } break;
+  }
+  return {score,assessment,suggestions};
+}
+
+function evaluateFaceModel(solution){
+  const dimensions=['F','A','C','E'].map(key=>{ const info=DIMENSION_INFO[key]; const result=evaluateDimension(key,solution); return {...info,...result}; });
+  const overallScore=Math.round(dimensions.reduce((sum,d)=>sum+d.score,0)/dimensions.length);
+  return {dimensions,overallScore,radarData:dimensions.map(d=>({dimension:d.key,value:d.score,fullName:d.fullName}))};
+}
+
+// ====== Utils ======
+function getScoreColor(score){ if(score>=75) return 'text-emerald-600'; if(score>=55) return 'text-indigo-600'; if(score>=35) return 'text-amber-600'; return 'text-rose-600'; }
+function getScoreBg(score){ if(score>=75) return 'bg-emerald-50 border-emerald-200'; if(score>=55) return 'bg-indigo-50 border-indigo-200'; if(score>=35) return 'bg-amber-50 border-amber-200'; return 'bg-rose-50 border-rose-200'; }
+function getScoreLabel(score){ if(score>=75) return t('scoreExcellent'); if(score>=55) return t('scoreGood'); if(score>=35) return t('scoreNeedsWork'); return t('scoreInsufficient'); }
+function esc(str){ return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ====== State ======
+let currentTab='input', analysis=null, isAnalyzing=false;
+
+// ====== Tab Switch ======
+function switchTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    const isActive=btn.dataset.tab===tab;
+    btn.className=isActive?'tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-white text-indigo-600 shadow-sm border border-indigo-100 transition-all':'tab-btn px-4 py-2 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-700 transition-all';
+  });
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.add('hidden'));
+  const contentEl=document.getElementById('tab-'+tab); if(contentEl) contentEl.classList.remove('hidden');
+  const emptyEl=document.getElementById('empty-state');
+  if(emptyEl){ if(tab!=='input'&&!analysis) emptyEl.classList.remove('hidden'); else emptyEl.classList.add('hidden'); }
+  if(tab==='bertopic'&&analysis) renderBertopic();
+  if(tab==='face'&&analysis) renderFace();
+  if(tab==='feedback'&&analysis) renderFeedback();
+}
+
+// ====== Render Presets ======
+function renderPresets(){
+  const scEl=document.getElementById('preset-scenarios'), soEl=document.getElementById('preset-solutions');
+  if(scEl) scEl.innerHTML=PRESET_SCENARIOS.map(s=>`<button onclick="setScenario('${s.id}')" class="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/60 text-slate-600 border border-slate-200 hover:border-rose-300 hover:text-rose-600 hover:bg-rose-50/50 transition-all"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-500 group-hover:bg-rose-200">${t('exampleLabel')}</span>${t(s.labelKey)}</button>`).join('');
+  if(soEl) soEl.innerHTML=PRESET_SOLUTIONS.map(s=>`<button onclick="setSolution('${s.id}')" class="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/60 text-slate-600 border border-slate-200 hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50/50 transition-all"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-600 group-hover:bg-emerald-200">${t('exampleLabel')}</span>${t(s.labelKey)}</button>`).join('');
+}
+function setScenario(id){ const s=PRESET_SCENARIOS.find(x=>x.id===id); if(s) document.getElementById('scenario-input').value=locale==='zh'?s.textZh:s.textEn; }
+function setSolution(id){ const s=PRESET_SOLUTIONS.find(x=>x.id===id); if(s) document.getElementById('solution-input').value=locale==='zh'?s.textZh:s.textEn; }
+
+// ====== Analyze ======
+function handleAnalyze(){
+  const scenario=document.getElementById('scenario-input').value.trim();
+  const solution=document.getElementById('solution-input').value.trim();
+  if(!scenario||!solution) return;
+  isAnalyzing=true;
+  const btn=document.getElementById('analyze-btn');
+  btn.disabled=true;
+  document.getElementById('btn-icon').innerHTML='<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>';
+  document.getElementById('btn-text').textContent=t('analyzing');
+  setTimeout(()=>{
+    const sa=analyzeScenario(scenario);
+    const br=analyzeSolution(solution,sa.problems);
+    const eff=evaluateSolutionEffectiveness(solution,sa.problems,br);
+    const fr=evaluateFaceModel(solution);
+    analysis={bertopicResult:br,faceResult:fr,effectivenessScore:eff.score,strengths:eff.strengths,improvements:eff.improvements,topicCoverage:eff.topicCoverage,problemAlignment:eff.problemAlignment,completeness:eff.completeness,actionability:eff.actionability,innovation:eff.innovation};
+    isAnalyzing=false; btn.disabled=false;
+    document.getElementById('btn-icon').innerHTML='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>';
+    document.getElementById('btn-text').textContent=t('analyzeButton');
+    switchTab('bertopic');
+  },1200);
+}
+
+// ====== Radar Chart SVG ======
+function renderRadarChart(dimensions,containerId){
+  const size=320,cx=size/2,cy=size/2,outerR=size*0.35;
+  const dims=dimensions.map(d=>({key:d.key,name:d.fullName,score:d.score,color:d.color}));
+  const n=dims.length, angleOffset=-Math.PI/2;
+  let gridSvg=''; for(let i=1;i<=5;i++){ const r=outerR*(i/5); const pts=[]; for(let j=0;j<n;j++){ const a=angleOffset+(j*2*Math.PI/n); pts.push(`${cx+r*Math.cos(a)},${cy+r*Math.sin(a)}`); } gridSvg+=`<polygon points="${pts.join(' ')}" fill="none" stroke="#e2e8f0" stroke-width="1"/>`; }
+  let axisSvg=''; for(let j=0;j<n;j++){ const a=angleOffset+(j*2*Math.PI/n); axisSvg+=`<line x1="${cx}" y1="${cy}" x2="${cx+outerR*Math.cos(a)}" y2="${cy+outerR*Math.sin(a)}" stroke="#e2e8f0" stroke-width="1"/>`; }
+  const dataPts=dims.map((d,j)=>{ const a=angleOffset+(j*2*Math.PI/n); const r=outerR*(d.score/100); return `${cx+r*Math.cos(a)},${cy+r*Math.sin(a)}`; });
+  const polySvg=`<polygon class="radar-polygon" points="${dataPts.join(' ')}" fill="#6366f1" fill-opacity="0.2" stroke="#6366f1" stroke-width="2"/>`;
+  let labelSvg=''; dims.forEach((d,j)=>{ const a=angleOffset+(j*2*Math.PI/n); const lr=outerR+24; const x=cx+lr*Math.cos(a),y=cy+lr*Math.sin(a); labelSvg+=`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" fill="#64748b" font-size="11" font-family="sans-serif">${d.key} · ${d.name}</text>`; });
+  let tickSvg=''; for(let i=1;i<=5;i++){ const r=outerR*(i/5); tickSvg+=`<text x="${cx+4}" y="${cy-r}" fill="#94a3b8" font-size="9">${i*20}</text>`; }
+  document.getElementById(containerId).innerHTML=`<svg width="100%" height="320" viewBox="0 0 ${size} ${size}">${gridSvg}${axisSvg}${polySvg}${labelSvg}${tickSvg}</svg>`;
+}
+
+// ====== Render BERTopic ======
+function renderBertopic(){
+  if(!analysis||!analysis.bertopicResult) return;
+  const r=analysis.bertopicResult, c=document.getElementById('bertopic-content');
+  let cards='';
+  r.topics.forEach(topic=>{
+    const kws=topic.keywords.slice(0,5).map(kw=>`<span class="px-2 py-0.5 rounded-md text-[11px] bg-slate-50 text-slate-600 border border-slate-150">${esc(kw)}</span>`).join('');
+    const docs=topic.representativeDocs.map((doc,i)=>`<p class="text-xs text-slate-500 leading-relaxed line-clamp-2">&ldquo;${esc(doc)}&rdquo;</p>`).join('');
+    cards+=`<div class="glass rounded-xl shadow-lg p-5 hover:shadow-xl transition-shadow fade-in"><div class="flex items-center justify-between mb-3"><span class="text-xs font-mono text-slate-400">Topic #${topic.topicId}</span><span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100 font-medium">${(topic.share*100).toFixed(1)}%</span></div><h3 class="text-sm font-semibold text-slate-800 mb-2.5">${esc(topic.topicName)}</h3><div class="flex flex-wrap gap-1.5 mb-3">${kws}</div><div class="space-y-1.5">${docs}</div><div class="mt-3 pt-3 border-t border-slate-100"><div class="flex items-center gap-2"><div class="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div class="bar-fill h-full bg-indigo-400 rounded-full" style="width:${topic.share*100}%"></div></div><span class="text-xs text-slate-400 font-mono">n=${topic.size}</span></div></div></div>`;
+  });
+  const maxCount=Math.max(...r.topicDistribution.map(d=>d.count),1);
+  let bars='';
+  r.topicDistribution.forEach(dist=>{ bars+=`<div class="flex items-center gap-3 fade-in"><span class="text-xs text-slate-500 w-28 truncate font-medium">${esc(dist.name)}</span><div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden"><div class="bar-fill h-full bg-indigo-400/70 rounded-full" style="width:${(dist.count/maxCount)*100}%"></div></div><span class="text-xs text-slate-400 font-mono w-8 text-right">${dist.count}</span></div>`; });
+  c.innerHTML=`<div class="space-y-6"><div class="glass rounded-xl shadow-lg p-6"><div class="flex items-center gap-3 mb-1"><div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center border border-indigo-100"><svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></div><div><h2 class="text-base font-semibold text-slate-800">${t('bertopicTitle')}</h2><p class="text-xs text-slate-500 mt-0.5">${t('bertopicSubtitle',r.totalTopics,esc(r.dominantTopic?.topicName||'无'))}</p></div></div></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${cards}</div><div class="glass rounded-xl shadow-lg p-6"><h3 class="text-sm font-semibold text-slate-700 mb-4">${t('topicDistribution')}</h3><div class="space-y-3">${bars}</div></div></div>`;
+}
+
+// ====== Render FACE ======
+function renderFace(){
+  if(!analysis||!analysis.faceResult) return;
+  const fr=analysis.faceResult, c=document.getElementById('face-content');
+  let dimCards='';
+  fr.dimensions.forEach(dim=>{
+    const suggestions=dim.suggestions.map((s,i)=>`<li class="text-xs text-slate-500 flex items-start gap-1.5"><span class="text-amber-500 mt-0.5 shrink-0">→</span>${esc(s)}</li>`).join('');
+    dimCards+=`<div class="glass rounded-xl shadow-lg p-4 fade-in"><div class="flex items-center justify-between mb-2"><div class="flex items-center gap-2.5"><span class="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-sm" style="background-color:${dim.color}">${dim.key}</span><div><span class="text-sm font-semibold text-slate-800">${dim.name}</span><span class="text-xs text-slate-400 ml-2">${locale==='zh'?dim.fullNameZh:dim.fullName}</span></div></div><span class="text-lg font-bold font-mono ${getScoreColor(dim.score)}">${dim.score}</span></div><p class="text-xs text-slate-500 mb-1.5">${locale==='zh'?esc(dim.description):esc(dim.descriptionEn)}</p><p class="text-[11px] text-slate-400 italic mb-2">${t('cognitiveLine')}: ${esc(dim.cognitiveLine)}</p><p class="text-xs text-slate-600 mb-2 font-medium">${esc(dim.assessment)}</p>${suggestions?`<ul class="space-y-1">${suggestions}</ul>`:''}</div>`;
+  });
+  c.innerHTML=`<div class="space-y-6"><div class="glass rounded-xl shadow-lg p-6"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center border border-emerald-100"><svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/></svg></div><div><h2 class="text-base font-semibold text-slate-800">${t('faceTitle')}</h2><p class="text-xs text-slate-500 mt-0.5">${t('faceSubtitle')}</p></div></div><div class="px-5 py-2.5 rounded-xl border ${getScoreBg(fr.overallScore)}"><span class="text-2xl font-bold font-mono ${getScoreColor(fr.overallScore)}">${fr.overallScore}</span><span class="text-xs text-slate-400 ml-1.5">/ 100</span><span class="text-xs ml-2 font-medium ${getScoreColor(fr.overallScore)}">${getScoreLabel(fr.overallScore)}</span></div></div></div><div class="grid grid-cols-1 lg:grid-cols-2 gap-8"><div class="glass rounded-xl shadow-lg p-6"><h3 class="text-sm font-semibold text-slate-700 mb-4">${t('radarChartTitle')}</h3><div id="radar-chart-container"></div></div><div class="space-y-3">${dimCards}</div></div></div>`;
+  setTimeout(()=>renderRadarChart(fr.dimensions,'radar-chart-container'),50);
+}
+
+// ====== Render Feedback ======
+function renderFeedback(){
+  if(!analysis) return;
+  const c=document.getElementById('feedback-content');
+  const strengthsHtml=analysis.strengths.length>0?`<div class="glass rounded-xl shadow-lg p-6 border-l-4 border-l-emerald-400 fade-in"><div class="flex items-center gap-2 mb-4"><svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><h3 class="text-sm font-semibold text-emerald-700">${t('strengths')}</h3></div><ul class="space-y-2.5">${analysis.strengths.map(s=>`<li class="flex items-start gap-2.5"><span class="text-emerald-500 mt-1 text-xs shrink-0">✓</span><span class="text-sm text-slate-700">${esc(s)}</span></li>`).join('')}</ul></div>`:'';
+  const improvementsHtml=analysis.improvements.length>0?`<div class="glass rounded-xl shadow-lg p-6 border-l-4 border-l-amber-400 fade-in"><div class="flex items-center gap-2 mb-4"><svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg><h3 class="text-sm font-semibold text-amber-700">${t('improvements')}</h3></div><ul class="space-y-2.5">${analysis.improvements.map(s=>`<li class="flex items-start gap-2.5"><span class="text-amber-500 mt-1 text-xs shrink-0">→</span><span class="text-sm text-slate-700">${esc(s)}</span></li>`).join('')}</ul></div>`:'';
+  const faceSummary=analysis.faceResult?`<div class="glass rounded-xl shadow-lg p-6 fade-in"><h3 class="text-sm font-semibold text-slate-700 mb-4">${t('faceOverview')}</h3><div class="grid grid-cols-4 gap-3">${analysis.faceResult.dimensions.map(dim=>`<div class="text-center p-4 rounded-xl bg-white/60 border border-slate-100"><span class="inline-flex w-8 h-8 rounded-lg items-center justify-center text-white font-bold text-xs mb-2 shadow-sm" style="background-color:${dim.color}">${dim.key}</span><p class="text-2xl font-bold font-mono ${getScoreColor(dim.score)}">${dim.score}</p><p class="text-xs text-slate-400 mt-1">${dim.name}</p></div>`).join('')}</div></div>`:'';
+  const scoreItems=[
+    {label:t('topicCoverage'),value:analysis.topicCoverage,color:'text-indigo-600'},
+    {label:t('problemAlignment'),value:analysis.problemAlignment,color:'text-emerald-600'},
+    {label:t('completeness'),value:analysis.completeness,color:'text-blue-600'},
+    {label:t('actionability'),value:analysis.actionability,color:'text-purple-600'},
+    {label:t('innovation'),value:analysis.innovation,color:'text-amber-600'},
+  ];
+  c.innerHTML=`<div class="space-y-6"><div class="glass rounded-xl shadow-lg p-6 fade-in"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center border border-amber-100"><svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div><h2 class="text-base font-semibold text-slate-800">${t('feedbackTitle')}</h2><p class="text-xs text-slate-500 mt-0.5">${t('feedbackSubtitle')}</p></div></div></div><div class="glass rounded-xl shadow-lg p-8 text-center fade-in"><p class="text-sm text-slate-500 mb-3 font-medium">${t('overallScore')}</p><div class="inline-flex items-baseline gap-2 px-8 py-4 rounded-2xl border ${getScoreBg(analysis.effectivenessScore)}"><span class="text-5xl font-bold font-mono ${getScoreColor(analysis.effectivenessScore)}">${analysis.effectivenessScore}</span><span class="text-slate-400 text-lg">/ 100</span></div><p class="text-sm font-medium mt-3 ${getScoreColor(analysis.effectivenessScore)}">${getScoreLabel(analysis.effectivenessScore)}</p><div class="mt-6 grid grid-cols-2 sm:grid-cols-5 gap-3 max-w-2xl mx-auto">${scoreItems.map(item=>`<div class="bg-white/60 rounded-xl p-3 border border-slate-100"><p class="text-[11px] text-slate-400 mb-1">${item.label}</p><p class="text-lg font-bold font-mono ${item.color}">${item.value}%</p></div>`).join('')}</div></div>${strengthsHtml}${improvementsHtml}${faceSummary}</div>`;
+}
+
+// ====== Render All UI Text ======
+function renderAll(){
+  document.getElementById('header-name').textContent=t('platformName');
+  document.getElementById('header-subtitle').textContent=t('platformSubtitle');
+  document.getElementById('lang-label').textContent=locale==='zh'?t('langEn'):t('langZh');
+  document.getElementById('tab-btn-input').textContent=t('tabInput');
+  document.getElementById('tab-btn-bertopic').textContent=t('tabBertopic');
+  document.getElementById('tab-btn-face').textContent=t('tabFace');
+  document.getElementById('tab-btn-feedback').textContent=t('tabFeedback');
+  document.getElementById('scenario-title').textContent=t('scenarioTitle');
+  document.getElementById('scenario-desc').textContent=t('scenarioDesc');
+  document.getElementById('scenario-input').placeholder=t('scenarioPlaceholder');
+  document.getElementById('solution-title').textContent=t('solutionTitle');
+  document.getElementById('solution-desc').textContent=t('solutionDesc');
+  document.getElementById('solution-input').placeholder=t('solutionPlaceholder');
+  if(!isAnalyzing) document.getElementById('btn-text').textContent=t('analyzeButton');
+  document.getElementById('empty-text').textContent=t('emptyState');
+  document.getElementById('empty-btn').textContent=t('goToInput');
+  document.getElementById('footer-text').textContent=t('footer');
+  renderPresets();
+  // Re-render active tab if analysis exists
+  if(currentTab==='bertopic'&&analysis) renderBertopic();
+  if(currentTab==='face'&&analysis) renderFace();
+  if(currentTab==='feedback'&&analysis) renderFeedback();
+}
+
+// ====== Event Bindings ======
+document.addEventListener('DOMContentLoaded',()=>{
+  renderAll();
+  document.querySelectorAll('.tab-btn').forEach(btn=>{ btn.addEventListener('click',()=>switchTab(btn.dataset.tab)); });
+  document.getElementById('analyze-btn').addEventListener('click',handleAnalyze);
+  document.getElementById('lang-toggle').addEventListener('click',toggleLocale);
+});
+</script>
+</body>
+</html>
